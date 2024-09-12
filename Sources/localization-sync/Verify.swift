@@ -36,23 +36,39 @@ extension LocalizationSync {
             let localizationFiles = files.compactMap(LocalizationFile.init(url:))
             results.append(.init(level: .info, message: "Found \(localizationFiles.count, effect: .bold) file(s)"))
             
-            let apple = AppleLocalization(urls: localizationFiles.compactMap(\.xcStringsURL))
-            try apple.prepare(&results)
+            let appleURLs = localizationFiles.compactMap(\.xcStringsURL)
+            let apple: AppleLocalization?
+            if !appleURLs.isEmpty {
+                apple = AppleLocalization(urls: appleURLs)
+                try apple?.prepare(&results)
+            } else {
+                apple = nil
+            }
             
-            let android = AndroidLocalization(urls: localizationFiles.compactMap(\.xmlURL))
-            try android.prepare(&results)
-          
-            // TODO: Calculate proposed language map or let user specify one?
-            let languageMap: [String: String] = ["pl-PL": "pl", "sl-SI": "sl", "uk-UA": "uk"]
-            results.append(.init(level: .info, message: "Mapping language(s) \(languageMap)."))
-            try compareLists("language", a: "Apple", apple.languages, b: "Android", android.languages.map { languageMap[$0] ?? $0 }, &results)
+            let androidURLs = localizationFiles.compactMap(\.xmlURL)
+            let android: AndroidLocalization?
+            if !androidURLs.isEmpty {
+                android = AndroidLocalization(urls: androidURLs)
+                try android?.prepare(&results)
+            } else {
+                android = nil
+            }
             
-            try compareLists("key", separator: "\n- ", a: "Apple", apple.keys, b: "Android", android.keys.map { android.localizedUnit(key: $0, language: "en").first?.value ?? $0 }, &results)
-
-            let _ = try apple.verify(&results)
-            let _ = try android.verify(&results)
-            let _ = try apple.compare(android: android, &results)
+            if let apple, let android {
+                // TODO: Calculate proposed language map or let user specify one?
+                let languageMap: [String: String] = ["pl-PL": "pl", "sl-SI": "sl", "uk-UA": "uk"]
+                results.append(.init(level: .info, message: "Mapping language(s) \(languageMap)."))
+                try compareLists("language", a: "Apple", apple.languages, b: "Android", android.languages.map { languageMap[$0] ?? $0 }, &results)
+                
+                try compareLists("key", separator: "\n- ", a: "Apple", apple.keys, b: "Android", android.keys.map { android.localizedUnit(key: $0, language: "en").first?.value ?? $0 }, &results)
+            }
             
+            let _ = try apple?.verify(&results)
+            let _ = try android?.verify(&results)
+            
+            if let apple, let android {
+                let _ = try apple.compare(android: android, &results)
+            }
             return results
         }
         
